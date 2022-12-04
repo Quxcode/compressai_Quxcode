@@ -91,6 +91,26 @@ class ScaleSpaceFlow(nn.Module):
                     conv(mid_planes, out_planes, kernel_size=5, stride=2),
                 )
 
+        class Attentionblock(nn.Module):
+            def __init__(self , in_planes: int = 192 , out_planes: int = 192):
+                super(Attentionblock, self).__init__()
+                self.avg_pool = nn.AvgPool2d(5, 1, 2)
+                self.linear1 = nn.Linear(in_planes, 12)
+                self.linear2 = nn.Linear(12, out_planes)
+
+            def forward(self, input_x):
+                pool_x = self.avg_pool(input_x)
+                x = pool_x.permute(0, 2, 3, 1)
+                x = torch.sigmoid(
+                    F.relu(self.linear2(
+                        F.relu(self.linear1(x), inplace=True)
+                    ), inplace=True)
+                )
+                x = x.permute(0, 3, 1, 2)
+                x = x * pool_x
+                x = x + input_x
+                return x
+
         # _init_
         class Decoder(nn.Sequential):
             def __init__(
@@ -212,6 +232,7 @@ class ScaleSpaceFlow(nn.Module):
         self.res_encoder = Encoder(3)
         self.res_decoder = Decoder(3, in_planes=384)
         self.res_hyperprior = Hyperprior()
+        self.res_attention = Attentionblock()
 
         self.motion_encoder = Encoder(2 * 3)    # torch.cat((x_cur, x_ref), dim=1)      2*3
         self.motion_decoder = Decoder(2 + 1)    # motion_info ={ flow, scale_field }    2+1
@@ -294,6 +315,7 @@ class ScaleSpaceFlow(nn.Module):
         x_res = x_cur - x_pred
         y_res = self.res_encoder(x_res)
 
+        y_res = self.res_attention(y_res)   # 经过encoder后的残差进行attention
 
         y_res_hat, res_likelihoods = self.res_hyperprior(y_res)
 

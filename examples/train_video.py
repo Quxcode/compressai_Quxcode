@@ -260,6 +260,7 @@ def train_one_epoch(
 
         out_net = model(d)  # 调用网络获取输出          实际上module(data) 等价于module.forward(data)   当执行model(x)的时候，底层自动调用forward方法计算结果
         # model(x)调用基类的__call__方法，__call__再调用forward,而forward在子类中又重写了。
+        # out_net = {dict:2} = {'x_hat' : [tensor0 , tensor1, tensor2]}  {'likelihoods' : [tensor0 , tensor1, tensor2]}
 
         out_criterion = criterion(out_net, d)   # 获取损失值
         out_criterion["loss"].backward()    # 反向传播，得到梯度
