@@ -73,7 +73,7 @@ IMG_EXTENSIONS = (
 def collect_images(rootpath: str) -> List[str]:
     image_files = []
     for ext in IMG_EXTENSIONS:
-        image_files.extend(Path(rootpath).glob(f"*{ext}"))
+        image_files.extend(Path(rootpath).glob(f"**/*{ext}"))
     return image_files
 
 

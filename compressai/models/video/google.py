@@ -27,6 +27,8 @@
 # OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+# __package__ = 'compressai.models.video'
+
 import math
 
 from typing import List
@@ -74,6 +76,7 @@ class ScaleSpaceFlow(nn.Module):
     ):
         super().__init__()
 
+        # _init_
         class Encoder(nn.Sequential):
             def __init__(
                 self, in_planes: int, mid_planes: int = 128, out_planes: int = 192
@@ -88,6 +91,7 @@ class ScaleSpaceFlow(nn.Module):
                     conv(mid_planes, out_planes, kernel_size=5, stride=2),
                 )
 
+        # _init_
         class Decoder(nn.Sequential):
             def __init__(
                 self, out_planes: int, in_planes: int = 192, mid_planes: int = 128
@@ -102,6 +106,7 @@ class ScaleSpaceFlow(nn.Module):
                     deconv(mid_planes, out_planes, kernel_size=5, stride=2),
                 )
 
+        # Hyperprior()
         class HyperEncoder(nn.Sequential):
             def __init__(
                 self, in_planes: int = 192, mid_planes: int = 192, out_planes: int = 192
@@ -114,6 +119,7 @@ class ScaleSpaceFlow(nn.Module):
                     conv(mid_planes, mid_planes, kernel_size=5, stride=2),
                 )
 
+        # Hyperprior()
         class HyperDecoder(nn.Sequential):
             def __init__(
                 self, in_planes: int = 192, mid_planes: int = 192, out_planes: int = 192
@@ -126,6 +132,7 @@ class ScaleSpaceFlow(nn.Module):
                     deconv(mid_planes, out_planes, kernel_size=5, stride=2),
                 )
 
+        # Hyperprior()
         class HyperDecoderWithQReLU(nn.Module):
             def __init__(
                 self, in_planes: int = 192, mid_planes: int = 192, out_planes: int = 192
@@ -149,6 +156,7 @@ class ScaleSpaceFlow(nn.Module):
 
                 return x
 
+        # _init_
         class Hyperprior(CompressionModel):
             def __init__(self, planes: int = 192, mid_planes: int = 192):
                 super().__init__(entropy_bottleneck_channels=mid_planes)
@@ -159,7 +167,7 @@ class ScaleSpaceFlow(nn.Module):
                 )
                 self.gaussian_conditional = GaussianConditional(None)
 
-            def forward(self, y):
+            def forward(self, y):   # eval 中 inference_entropy_estimation
                 z = self.hyper_encoder(y)
                 z_hat, z_likelihoods = self.entropy_bottleneck(z)
 
@@ -205,14 +213,15 @@ class ScaleSpaceFlow(nn.Module):
         self.res_decoder = Decoder(3, in_planes=384)
         self.res_hyperprior = Hyperprior()
 
-        self.motion_encoder = Encoder(2 * 3)
-        self.motion_decoder = Decoder(2 + 1)
+        self.motion_encoder = Encoder(2 * 3)    # torch.cat((x_cur, x_ref), dim=1)      2*3
+        self.motion_decoder = Decoder(2 + 1)    # motion_info ={ flow, scale_field }    2+1
         self.motion_hyperprior = Hyperprior()
 
         self.sigma0 = sigma0
         self.num_levels = num_levels
         self.scale_field_shift = scale_field_shift
 
+    # eval 中 inference_entropy_estimation()
     def forward(self, frames):
         if not isinstance(frames, List):
             raise RuntimeError(f"Invalid number of frames: {len(frames)}.")
@@ -236,12 +245,14 @@ class ScaleSpaceFlow(nn.Module):
             "likelihoods": frames_likelihoods,
         }
 
+    # forward
     def forward_keyframe(self, x):
         y = self.img_encoder(x)
         y_hat, likelihoods = self.img_hyperprior(y)
         x_hat = self.img_decoder(y_hat)
         return x_hat, {"keyframe": likelihoods}
 
+    # compress()
     def encode_keyframe(self, x):
         y = self.img_encoder(x)
         y_hat, out_keyframe = self.img_hyperprior.compress(y)
@@ -249,25 +260,41 @@ class ScaleSpaceFlow(nn.Module):
 
         return x_hat, out_keyframe
 
+    # decompress()
     def decode_keyframe(self, strings, shape):
         y_hat = self.img_hyperprior.decompress(strings, shape)
         x_hat = self.img_decoder(y_hat)
 
         return x_hat
 
+    # forward()
     def forward_inter(self, x_cur, x_ref):
         # encode the motion information
         x = torch.cat((x_cur, x_ref), dim=1)
         y_motion = self.motion_encoder(x)
+
+
+
+        # motion_encoder 最后添加attention block
+
+
+
         y_motion_hat, motion_likelihoods = self.motion_hyperprior(y_motion)
 
         # decode the space-scale flow information
-        motion_info = self.motion_decoder(y_motion_hat)
+        motion_info = self.motion_decoder(y_motion_hat)     # motion_info ={ flow, scale_field }
+
+
+        # decoder 之后添加refine-net，可以不用？？？
+
+
         x_pred = self.forward_prediction(x_ref, motion_info)
 
         # residual
         x_res = x_cur - x_pred
         y_res = self.res_encoder(x_res)
+
+
         y_res_hat, res_likelihoods = self.res_hyperprior(y_res)
 
         # y_combine
@@ -279,6 +306,7 @@ class ScaleSpaceFlow(nn.Module):
 
         return x_rec, {"motion": motion_likelihoods, "residual": res_likelihoods}
 
+    # compress()
     def encode_inter(self, x_cur, x_ref):
         # encode the motion information
         x = torch.cat((x_cur, x_ref), dim=1)
@@ -309,6 +337,7 @@ class ScaleSpaceFlow(nn.Module):
             "shape": {"motion": out_motion["shape"], "residual": out_res["shape"]},
         }
 
+    # decompress()
     def decode_inter(self, x_ref, strings, shapes):
         key = "motion"
         y_motion_hat = self.motion_hyperprior.decompress(strings[key], shapes[key])
@@ -330,6 +359,7 @@ class ScaleSpaceFlow(nn.Module):
 
         return x_rec
 
+    # forward_prediction()
     @staticmethod
     def gaussian_volume(x, sigma: float, num_levels: int):
         """Efficient gaussian volume construction.
@@ -356,6 +386,7 @@ class ScaleSpaceFlow(nn.Module):
             volume.append(interp.unsqueeze(2))
         return torch.cat(volume, dim=2)
 
+    # forward_prediction()
     @amp.autocast(enabled=False)
     def warp_volume(self, volume, flow, scale_field, padding_mode: str = "border"):
         """3D volume warping."""
@@ -376,6 +407,7 @@ class ScaleSpaceFlow(nn.Module):
         )
         return out.squeeze(2)
 
+    # forward_inter()  encode_inter()  decode_inter()
     def forward_prediction(self, x_ref, motion_info):
         flow, scale_field = motion_info.chunk(2, dim=1)
 
@@ -383,6 +415,7 @@ class ScaleSpaceFlow(nn.Module):
         x_pred = self.warp_volume(volume, flow, scale_field)
         return x_pred
 
+    # train_one_epoch : compute_aux_loss()
     def aux_loss(self):
         """Return a list of the auxiliary entropy bottleneck over module(s)."""
 
@@ -393,6 +426,7 @@ class ScaleSpaceFlow(nn.Module):
 
         return aux_loss_list
 
+    # evaluate
     def compress(self, frames):
         if not isinstance(frames, List):
             raise RuntimeError(f"Invalid number of frames: {len(frames)}.")
@@ -414,6 +448,7 @@ class ScaleSpaceFlow(nn.Module):
 
         return frame_strings, shape_infos
 
+    # evaluate
     def decompress(self, strings, shapes):
 
         if not isinstance(strings, List) or not isinstance(shapes, List):
@@ -436,6 +471,7 @@ class ScaleSpaceFlow(nn.Module):
 
         return dec_frames
 
+    # train_video : main()
     def load_state_dict(self, state_dict):
 
         # Dynamically update the entropy bottleneck buffers related to the CDFs
@@ -480,6 +516,7 @@ class ScaleSpaceFlow(nn.Module):
 
         super().load_state_dict(state_dict)
 
+    # ssf2020 ： return _load_model()
     @classmethod
     def from_state_dict(cls, state_dict):
         """Return a new model instance from `state_dict`."""
@@ -487,6 +524,7 @@ class ScaleSpaceFlow(nn.Module):
         net.load_state_dict(state_dict)
         return net
 
+    # utils.update_models
     def update(self, scale_table=None, force=False):
         if scale_table is None:
             scale_table = get_scale_table()

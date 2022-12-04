@@ -490,9 +490,9 @@ def create_parser() -> argparse.ArgumentParser:
     checkpoint_parser.add_argument(
         "-p",
         "--path",
-        dest="paths",
+        dest="paths",   # 解析后的参数名称
         type=str,
-        nargs="*",
+        nargs="*",      #  * 号表示 0 或多个参数
         required=True,
         help="checkpoint path",
     )
@@ -527,7 +527,7 @@ def main(args: Any = None) -> None:
         load_func = load_pretrained
         log_fmt = "\rEvaluating {0} | {run:d}"
     else:
-        runs = args.paths
+        runs = args.paths   # checkpoint路径，可以多个
         opts = (args.architecture,)
         load_func = load_checkpoint
         log_fmt = "\rEvaluating {run:s}"
@@ -537,7 +537,7 @@ def main(args: Any = None) -> None:
         if args.verbose:
             sys.stderr.write(log_fmt.format(*opts, run=run))
             sys.stderr.flush()
-        model = load_func(*opts, run)
+        model = load_func(*opts, run)   # 将模型类型和checkpoint数据加载到模型中
         if args.source == "pretrained":
             trained_net = f"{args.architecture}-{args.metric}-{run}-{description}"
         else:

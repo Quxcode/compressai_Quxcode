@@ -87,7 +87,7 @@ class VideoFolder(Dataset):
         if transform is None:
             raise RuntimeError("Transform must be applied")
 
-        splitfile = Path(f"{root}/{split}.list")
+        splitfile = Path(f"{root}/{split}.txt")
         splitdir = Path(f"{root}/sequences")
 
         if not splitfile.is_file():
@@ -97,7 +97,7 @@ class VideoFolder(Dataset):
             raise RuntimeError(f'Invalid directory "{root}"')
 
         with open(splitfile, "r") as f_in:
-            self.sample_folders = [Path(f"{splitdir}/{f.strip()}") for f in f_in]
+            self.sample_folders = [Path(f"{splitdir}/{f.strip()}") for f in f_in]   # sample_floders的长度等于txt中的行数
 
         self.max_frames = 3  # hard coding for now
         self.rnd_interval = rnd_interval
@@ -113,23 +113,29 @@ class VideoFolder(Dataset):
             img: `PIL.Image.Image` or transformed `PIL.Image.Image`.
         """
 
-        sample_folder = self.sample_folders[index]
-        samples = sorted(f for f in sample_folder.iterdir() if f.is_file())
+        sample_folder = self.sample_folders[index]  #sample_folder即txt中第index行代表的子文件夹的路径
+        samples = sorted(f for f in sample_folder.iterdir() if f.is_file()) # 对每个子文件夹中的7帧图片的路径按顺序排序，
 
-        max_interval = (len(samples) + 2) // self.max_frames
-        interval = random.randint(1, max_interval) if self.rnd_interval else 1
+        max_interval = (len(samples) + 2) // self.max_frames    # (7+2) // 3 = 3
+        interval = random.randint(1, max_interval) if self.rnd_interval else 1  # train时 interval = rand（1，3）  test时 interval = 1
         frame_paths = (samples[::interval])[: self.max_frames]
 
-        frames = np.concatenate(
-            [np.asarray(Image.open(p).convert("RGB")) for p in frame_paths], axis=-1
+        # axis = 0，则表示合并后第一个维度数据要变（axis是从0开始计算的，即第一维表示0）
+        # axis = 1，则表示合并后第二个维度的数据要变
+        # axis = 2，则表示合并后第三个维度数据要变
+        # axis = -1，则表示最后一个维度
+        frames = np.concatenate(                                                        # convert("RGB") 将RGBA 格式 转变成 RGB 格式
+            [np.asarray(Image.open(p).convert("RGB")) for p in frame_paths], axis=-1    # np.array.shape 由一帧(480,720,3) → 三帧(480,720,9)
         )
-        frames = torch.chunk(self.transform(frames), self.max_frames)
+        frames = torch.chunk(self.transform(frames), self.max_frames)   # transform中的toTensor返回shape = torch.Size([9, 480, 720])
+                                                                        # transform中的CenterCrop返回shape = torch.Size([9, 256, 256])
+                                                                # torch.chunk 返回由3个tensor组成的元组，每个的shape = torch.Size([3, 256, 256])
 
         if self.rnd_temp_order:
             if random.random() < 0.5:
-                return frames[::-1]
+                return frames[::-1]     # 数组倒序
 
-        return frames
+        return frames      # 返回的是max_frames大小的元组
 
     def __len__(self):
         return len(self.sample_folders)

@@ -46,6 +46,7 @@ from torchvision import transforms
 from compressai.datasets import VideoFolder
 from compressai.zoo import video_models
 
+import os
 
 def collect_likelihoods_list(likelihoods_list, num_pixels: int):
     bpp_info_dict = defaultdict(int)
@@ -252,18 +253,19 @@ def train_one_epoch(
     device = next(model.parameters()).device
 
     for i, batch in enumerate(train_dataloader):
-        d = [frames.to(device) for frames in batch]
+        d = [frames.to(device) for frames in batch] # 每个batch是一个8*3的tensor，即batch中有8个frames，每个frames中有3个frame
 
         optimizer.zero_grad()
-        aux_optimizer.zero_grad()
+        aux_optimizer.zero_grad()   # 梯度清零，反向传播之前进行
 
-        out_net = model(d)
+        out_net = model(d)  # 调用网络获取输出          实际上module(data) 等价于module.forward(data)   当执行model(x)的时候，底层自动调用forward方法计算结果
+        # model(x)调用基类的__call__方法，__call__再调用forward,而forward在子类中又重写了。
 
-        out_criterion = criterion(out_net, d)
-        out_criterion["loss"].backward()
+        out_criterion = criterion(out_net, d)   # 获取损失值
+        out_criterion["loss"].backward()    # 反向传播，得到梯度
         if clip_max_norm > 0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), clip_max_norm)
-        optimizer.step()
+        optimizer.step()    # 使用梯度下降的策略，执行一次梯度更新过程。梯度下降策略：随机梯度下降法，momentum加动量的方法，自适应学习率的方法
 
         aux_loss = compute_aux_loss(model.aux_loss(), backward=True)
         aux_optimizer.step()
@@ -311,11 +313,21 @@ def test_epoch(epoch, test_dataloader, model, criterion):
     return loss.avg
 
 
-def save_checkpoint(state, is_best, filename="checkpoint.pth.tar"):
+# def save_checkpoint(state, is_best, filename="checkpoint.pth.tar"):
+#     torch.save(state, filename)
+#     if is_best:
+#         shutil.copyfile(filename, "checkpoint_best_loss.pth.tar")
+
+def save_checkpoint(lmbda, state, is_best, filename="/checkpoint.pth.tar"):
+    print(lmbda)
+    isExists = os.path.exists("E:\\CompressAI_data\\CKPT\\SSF" + str(lmbda))
+    if not isExists:
+        os.makedirs("E:\\CompressAI_data\\CKPT\\SSF" + str(lmbda))
+    filename="E:\\CompressAI_data\\CKPT\\SSF" + str(lmbda) + "/checkpoint.pth.tar"
     torch.save(state, filename)
     if is_best:
-        shutil.copyfile(filename, "checkpoint_best_loss.pth.tar")
-
+        best_filename = "E:\\CompressAI_data\\CKPT\\SSF" + str(lmbda) + "/checkpoint_best_loss.pth.tar"
+        shutil.copyfile(filename, best_filename)
 
 def parse_args(argv):
     parser = argparse.ArgumentParser(description="Example training script.")
@@ -327,12 +339,13 @@ def parse_args(argv):
         help="Model architecture (default: %(default)s)",
     )
     parser.add_argument(
-        "-d", "--dataset", type=str, required=True, help="Training dataset"
+        # "-d", "--dataset", type=str, required=True, help="Training dataset"
+        "-d", "--dataset", type=str, default="E:\\CompressAI_data\\video\\vimeo_septuplet", help="Training dataset"
     )
     parser.add_argument(
         "-e",
         "--epochs",
-        default=100,
+        default=200,
         type=int,
         help="Number of epochs (default: %(default)s)",
     )
@@ -347,7 +360,7 @@ def parse_args(argv):
         "-n",
         "--num-workers",
         type=int,
-        default=4,
+        default=8,
         help="Dataloaders threads (default: %(default)s)",
     )
     parser.add_argument(
@@ -404,6 +417,7 @@ def main(argv):
         random.seed(args.seed)
 
     # Warning, the order of the transform composition should be kept.
+    # Compose()类会将transforms列表里面的transform操作进行遍历。
     train_transforms = transforms.Compose(
         [transforms.ToTensor(), transforms.RandomCrop(args.patch_size)]
     )
@@ -416,14 +430,16 @@ def main(argv):
         args.dataset,
         rnd_interval=True,
         rnd_temp_order=True,
-        split="train",
+        # split="train",
+        split="sep_trainlist",
         transform=train_transforms,
     )
     test_dataset = VideoFolder(
         args.dataset,
         rnd_interval=False,
         rnd_temp_order=False,
-        split="test",
+        # split="test",
+        split="sep_testlist",
         transform=test_transforms,
     )
 
@@ -446,10 +462,15 @@ def main(argv):
     )
 
     net = video_models[args.model](quality=3)
-    net = net.to(device)
+    net = net.to(device)    #将所有最开始读取数据时的tensor变量copy一份到device所指定的GPU上去，之后的运算都在GPU上进行。
+    print(args.model)
 
     optimizer, aux_optimizer = configure_optimizers(net, args)
+
+    # 基于验证度量动态地降低学习率  如果在 ‘patience’ 的 epoch 数量上指标没有改进，则学习率会降低。
     lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min")
+
+    # 自定义率失真损失和拉格朗日参数
     criterion = RateDistortionLoss(lmbda=args.lmbda, return_details=True)
 
     last_epoch = 0
@@ -457,14 +478,16 @@ def main(argv):
         print("Loading", args.checkpoint)
         checkpoint = torch.load(args.checkpoint, map_location=device)
         last_epoch = checkpoint["epoch"] + 1
-        net.load_state_dict(checkpoint["state_dict"])
+        net.load_state_dict(checkpoint["state_dict"])   #state_dict：不带模型结构的模型参数，可以只加载部分参数
         optimizer.load_state_dict(checkpoint["optimizer"])
         aux_optimizer.load_state_dict(checkpoint["aux_optimizer"])
         lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
 
     best_loss = float("inf")
     for epoch in range(last_epoch, args.epochs):
-        print(f"Learning rate: {optimizer.param_groups[0]['lr']}")
+        print(f"Learning rate: {optimizer.param_groups[0]['lr']}")  # 长度为6的字典，包括[‘amsgrad’, ‘params’, ‘lr’, ‘betas’, ‘weight_decay’, ‘eps’]
+        print(args.lmbda)
+
         train_one_epoch(
             net,
             criterion,
@@ -480,8 +503,22 @@ def main(argv):
         is_best = loss < best_loss
         best_loss = min(loss, best_loss)
 
+        # if args.save:
+        #     save_checkpoint(
+        #         {
+        #             "epoch": epoch,
+        #             "state_dict": net.state_dict(),
+        #             "loss": loss,
+        #             "optimizer": optimizer.state_dict(),
+        #             "aux_optimizer": aux_optimizer.state_dict(),
+        #             "lr_scheduler": lr_scheduler.state_dict(),
+        #         },
+        #         is_best,
+        #     )
+
         if args.save:
             save_checkpoint(
+                args.lmbda,
                 {
                     "epoch": epoch,
                     "state_dict": net.state_dict(),
