@@ -54,6 +54,7 @@ from compressai.models.utils import (
     update_registered_buffers,
 )
 
+from compressai.layers.layers import AttentionBlock
 
 @register_model("ssf2020")
 class ScaleSpaceFlow(nn.Module):
@@ -232,12 +233,12 @@ class ScaleSpaceFlow(nn.Module):
         self.res_encoder = Encoder(3)
         self.res_decoder = Decoder(3, in_planes=256)
         self.res_hyperprior = Hyperprior()
-        self.res_attention = Attentionblock()
+        self.res_attention = AttentionBlock(128)
 
         self.motion_encoder = Encoder(2 * 3)    # torch.cat((x_cur, x_ref), dim=1)      2*3
         self.motion_decoder = Decoder(2 + 1)    # motion_info ={ flow, scale_field }    2+1
         self.motion_hyperprior = Hyperprior()
-        self.motion_attention = Attentionblock()
+        self.motion_attention = AttentionBlock(128)
 
         self.sigma0 = sigma0
         self.num_levels = num_levels
