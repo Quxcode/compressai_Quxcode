@@ -257,7 +257,7 @@ def train_one_epoch(
 
         optimizer.zero_grad()
         aux_optimizer.zero_grad()   # 梯度清零，反向传播之前进行
-
+        #print('run here')
         out_net = model(d)  # 调用网络获取输出          实际上module(data) 等价于module.forward(data)   当执行model(x)的时候，底层自动调用forward方法计算结果
         # model(x)调用基类的__call__方法，__call__再调用forward,而forward在子类中又重写了。
         # out_net = {dict:2} = {'x_hat' : [tensor0 , tensor1, tensor2]}  {'likelihoods' : [tensor0 , tensor1, tensor2]}
@@ -321,13 +321,13 @@ def test_epoch(epoch, test_dataloader, model, criterion):
 
 def save_checkpoint(lmbda, state, is_best, filename="/checkpoint.pth.tar"):
     print(lmbda)
-    isExists = os.path.exists("E:\\CompressAI_data\\CKPT\\SSF" + str(lmbda))
+    isExists = os.path.exists("/mnt/d/QHX/CKPT_motion+res_attentionblock_64to128/SSF" + str(lmbda))
     if not isExists:
-        os.makedirs("E:\\CompressAI_data\\CKPT\\SSF" + str(lmbda))
-    filename="E:\\CompressAI_data\\CKPT\\SSF" + str(lmbda) + "/checkpoint.pth.tar"
+        os.makedirs("/mnt/d/QHX/CKPT_motion+res_attentionblock_64to128/SSF" + str(lmbda))
+    filename="/mnt/d/QHX/CKPT_motion+res_attentionblock_64to128/SSF" + str(lmbda) + "/checkpoint.pth.tar"
     torch.save(state, filename)
     if is_best:
-        best_filename = "E:\\CompressAI_data\\CKPT\\SSF" + str(lmbda) + "/checkpoint_best_loss.pth.tar"
+        best_filename = "/mnt/d/QHX/CKPT_motion+res_attentionblock_64to128/SSF" + str(lmbda) + "/checkpoint_best_loss.pth.tar"
         shutil.copyfile(filename, best_filename)
 
 def parse_args(argv):
@@ -341,12 +341,12 @@ def parse_args(argv):
     )
     parser.add_argument(
         # "-d", "--dataset", type=str, required=True, help="Training dataset"
-        "-d", "--dataset", type=str, default="E:\\CompressAI_data\\video\\vimeo_septuplet", help="Training dataset"
+        "-d", "--dataset", type=str, default="/mnt/d/QHX/dataset/video/vimeo_septuplet/", help="Training dataset"
     )
     parser.add_argument(
         "-e",
         "--epochs",
-        default=200,
+        default=500,
         type=int,
         help="Number of epochs (default: %(default)s)",
     )
@@ -361,7 +361,7 @@ def parse_args(argv):
         "-n",
         "--num-workers",
         type=int,
-        default=8,
+        default=12,
         help="Dataloaders threads (default: %(default)s)",
     )
     parser.add_argument(
@@ -377,7 +377,7 @@ def parse_args(argv):
     parser.add_argument(
         "--test-batch-size",
         type=int,
-        default=64,
+        default=16,
         help="Test batch size (default: %(default)s)",
     )
     parser.add_argument(
@@ -488,6 +488,8 @@ def main(argv):
     for epoch in range(last_epoch, args.epochs):
         print(f"Learning rate: {optimizer.param_groups[0]['lr']}")  # 长度为6的字典，包括[‘amsgrad’, ‘params’, ‘lr’, ‘betas’, ‘weight_decay’, ‘eps’]
         print(args.lmbda)
+        print(device)
+        print(args.num_workers, args.batch_size)
 
         train_one_epoch(
             net,
