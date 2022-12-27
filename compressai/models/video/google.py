@@ -80,7 +80,7 @@ class ScaleSpaceFlow(nn.Module):
         # _init_
         class Encoder(nn.Sequential):
             def __init__(
-                self, in_planes: int, mid_planes: int = 64, out_planes: int = 128
+                self, in_planes: int, mid_planes: int = 128, out_planes: int = 192
             ):
                 super().__init__(
                     conv(in_planes, mid_planes, kernel_size=5, stride=2),
@@ -93,7 +93,7 @@ class ScaleSpaceFlow(nn.Module):
                 )
 
         class Attentionblock(nn.Module):
-            def __init__(self , in_planes: int = 128 , out_planes: int = 128):
+            def __init__(self , in_planes: int = 192 , out_planes: int = 192):
                 super(Attentionblock, self).__init__()
                 self.avg_pool = nn.AvgPool2d(5, 1, 2)
                 self.linear1 = nn.Linear(in_planes, 12)
@@ -115,7 +115,7 @@ class ScaleSpaceFlow(nn.Module):
         # _init_
         class Decoder(nn.Sequential):
             def __init__(
-                self, out_planes: int, in_planes: int = 128, mid_planes: int = 64
+                self, out_planes: int, in_planes: int = 192, mid_planes: int = 128
             ):
                 super().__init__(
                     deconv(in_planes, mid_planes, kernel_size=5, stride=2),
@@ -130,7 +130,7 @@ class ScaleSpaceFlow(nn.Module):
         # Hyperprior()
         class HyperEncoder(nn.Sequential):
             def __init__(
-                self, in_planes: int = 128, mid_planes: int = 128, out_planes: int = 192
+                self, in_planes: int = 192, mid_planes: int = 192, out_planes: int = 192
             ):
                 super().__init__(
                     conv(in_planes, mid_planes, kernel_size=5, stride=2),
@@ -143,7 +143,7 @@ class ScaleSpaceFlow(nn.Module):
         # Hyperprior()
         class HyperDecoder(nn.Sequential):
             def __init__(
-                self, in_planes: int = 128, mid_planes: int = 128, out_planes: int = 128
+                self, in_planes: int = 192, mid_planes: int = 192, out_planes: int = 192
             ):
                 super().__init__(
                     deconv(in_planes, mid_planes, kernel_size=5, stride=2),
@@ -156,7 +156,7 @@ class ScaleSpaceFlow(nn.Module):
         # Hyperprior()
         class HyperDecoderWithQReLU(nn.Module):
             def __init__(
-                self, in_planes: int = 128, mid_planes: int = 128, out_planes: int = 128
+                self, in_planes: int = 192, mid_planes: int = 192, out_planes: int = 192
             ):
                 super().__init__()
 
@@ -179,7 +179,7 @@ class ScaleSpaceFlow(nn.Module):
 
         # _init_
         class Hyperprior(CompressionModel):
-            def __init__(self, planes: int = 128, mid_planes: int = 128):
+            def __init__(self, planes: int = 192, mid_planes: int = 192):
                 super().__init__(entropy_bottleneck_channels=mid_planes)
                 self.hyper_encoder = HyperEncoder(planes, mid_planes, planes)
                 self.hyper_decoder_mean = HyperDecoder(planes, mid_planes, planes)
@@ -231,14 +231,14 @@ class ScaleSpaceFlow(nn.Module):
         self.img_hyperprior = Hyperprior()
 
         self.res_encoder = Encoder(3)
-        self.res_decoder = Decoder(3, in_planes=256)
+        self.res_decoder = Decoder(3, in_planes=384)
         self.res_hyperprior = Hyperprior()
-        self.res_attention = AttentionBlock(128)
+        self.res_attention = AttentionBlock(192)
 
         self.motion_encoder = Encoder(2 * 3)    # torch.cat((x_cur, x_ref), dim=1)      2*3
         self.motion_decoder = Decoder(2 + 1)    # motion_info ={ flow, scale_field }    2+1
         self.motion_hyperprior = Hyperprior()
-        self.motion_attention = AttentionBlock(128)
+        self.motion_attention = AttentionBlock(192)
 
         self.sigma0 = sigma0
         self.num_levels = num_levels

@@ -321,13 +321,13 @@ def test_epoch(epoch, test_dataloader, model, criterion):
 
 def save_checkpoint(lmbda, state, is_best, filename="/checkpoint.pth.tar"):
     print(lmbda)
-    isExists = os.path.exists("/mnt/d/QHX/CKPT_motion+res_AttentionModule_64to128/SSF" + str(lmbda))
+    isExists = os.path.exists("/mnt/d/QHX/CKPT_motion+res_AttentionModule_128to192/SSF" + str(lmbda))
     if not isExists:
-        os.makedirs("/mnt/d/QHX/CKPT_motion+res_AttentionModule_64to128/SSF" + str(lmbda))
-    filename="/mnt/d/QHX/CKPT_motion+res_AttentionModule_64to128/SSF" + str(lmbda) + "/checkpoint.pth.tar"
+        os.makedirs("/mnt/d/QHX/CKPT_motion+res_AttentionModule_128to192/SSF" + str(lmbda))
+    filename="/mnt/d/QHX/CKPT_motion+res_AttentionModule_128to192/SSF" + str(lmbda) + "/checkpoint.pth.tar"
     torch.save(state, filename)
     if is_best:
-        best_filename = "/mnt/d/QHX/CKPT_motion+res_AttentionModule_64to128/SSF" + str(lmbda) + "/checkpoint_best_loss.pth.tar"
+        best_filename = "/mnt/d/QHX/CKPT_motion+res_AttentionModule_128to192/SSF" + str(lmbda) + "/checkpoint_best_loss.pth.tar"
         shutil.copyfile(filename, best_filename)
 
 def parse_args(argv):
